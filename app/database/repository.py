@@ -35,7 +35,9 @@ class InvoiceRepository:
             self.db.commit()
             self.db.refresh(db_invoice)
 
-            print(f"Invoice {invoice.invoice_id} saved successfully.")
+            print(
+                f"Invoice {invoice.invoice_id} saved successfully."
+            )
 
             return db_invoice
 
@@ -45,20 +47,25 @@ class InvoiceRepository:
 
     def get_invoice_by_id(self, invoice_id: str):
         """
-        Retrieve an invoice using its ID.
+        Retrieve an invoice using its unique ID.
         """
+        return self.db.get(InvoiceDB, invoice_id)
+
     def find_duplicate(
         self,
         vendor_gst_number: str,
         invoice_number: str
     ):
         """
-        Check whether the vendor has already submitted this invoice.
+        Check whether a vendor has already submitted
+        an invoice with the same invoice number.
         """
 
-        return self.db.query(InvoiceDB).filter(
-            InvoiceDB.vendor_gst_number == vendor_gst_number,
-            InvoiceDB.invoice_number == invoice_number
-        ).first()
-
-        return self.db.get(InvoiceDB, invoice_id)
+        return (
+            self.db.query(InvoiceDB)
+            .filter(
+                InvoiceDB.vendor_gst_number == vendor_gst_number,
+                InvoiceDB.invoice_number == invoice_number
+            )
+            .first()
+        )

@@ -237,3 +237,87 @@ Potential enhancements include:
 The Nimbus Retail Multi-Agent Invoice Processing System demonstrates how specialized agents can collaborate to automate invoice processing, apply business validation rules, identify exceptions, and support human decision-making.
 
 The project combines custom agent orchestration, REST API development, persistent storage, audit logging, and automated testing to provide a foundation for intelligent accounts payable automation.
+
+
+## System Architecture Diagram
+
+The Nimbus Retail Multi-Agent Invoice Processing System uses
+a modular agent-based workflow to validate vendor invoices
+before routing them for further processing or human review.
+
+```mermaid
+flowchart TD
+    A[Invoice Submission] --> B[FastAPI Application]
+    B --> C[Invoice Workflow Orchestrator]
+
+    C --> D[Intake Agent]
+    D --> E[Duplicate Detection]
+    E --> F{Duplicate or Database Failure?}
+
+    F -->|Yes| X[Exception Handling]
+    F -->|No| G[Extraction Agent]
+
+    G --> H[GST Validation Agent]
+    H --> I[Purchase Order Validation Agent]
+    I --> J[Policy Checking Agent]
+    J --> X
+
+    X --> K[Router Agent]
+    K --> L{Review Required?}
+
+    L -->|Yes| M[Human Review]
+    L -->|No| N[Ready for Next Stage]
+
+    M --> O[Approve or Reject]
+    O --> P[(SQLite Database)]
+
+    N --> P
+
+    C -. Status Changes .-> Q[Audit Service]
+    Q --> R[(Audit History)]
+
+    B --> S[PDF Extraction Service]
+    S --> C
+```
+
+### Safety and Control Mechanisms
+
+- Invoices above INR 50,000 require human approval.
+- Missing, invalid, or unknown GSTINs require human review.
+- Missing or mismatched purchase orders trigger exceptions.
+- Low extraction confidence requires human review.
+- Duplicate invoices are flagged for human verification.
+- Database and audit failures must not result in automatic approval.
+- Invoice processing does not initiate payments.
+
+### Automated Testing
+
+The project has 33 passing automated tests covering:
+
+- FastAPI endpoints and error handling
+- GST validation
+- Purchase order validation
+- High-value invoice policies
+- Extraction confidence and invoice totals
+- SQLite invoice persistence and duplicate lookup
+- PDF extraction and file validation
+
+Run the test suite:
+
+```powershell
+python -m pytest -q
+```
+
+### PDF Extraction Limitations
+
+The PDF extraction service currently supports text-based PDFs
+with recognizable invoice field labels.
+
+Scanned or image-only PDFs require OCR, which is not currently
+implemented.
+
+Extraction confidence is based on field completeness and does
+not represent a machine-learning accuracy score.
+
+Invoices with incomplete PDF extraction require manual correction
+before they can proceed through the processing workflow.

@@ -7,3 +7,5 @@ httpx==0.28.1
 python-multipart==0.0.33
 pytest==9.2.0
 pytest-asyncio==1.4.1.post1
+pypdf==7.0.0
+reportlab==5.1.0

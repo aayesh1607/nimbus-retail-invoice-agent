@@ -74,3 +74,40 @@ def test_decision_for_nonexistent_invoice_returns_404():
     )
 
     assert response.status_code == 404
+
+
+def test_extract_and_process_endpoint_exists():
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    assert "/invoices/extract-and-process" in response.json()["paths"]
+
+
+def test_extract_and_process_rejects_non_pdf():
+    response = client.post(
+        "/invoices/extract-and-process",
+        files={
+            "file": (
+                "invoice.txt",
+                b"Not a PDF document",
+                "text/plain",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_extract_and_process_rejects_invalid_pdf():
+    response = client.post(
+        "/invoices/extract-and-process",
+        files={
+            "file": (
+                "invoice.pdf",
+                b"Not a real PDF",
+                "application/pdf",
+            )
+        },
+    )
+
+    assert response.status_code == 400

@@ -1,4 +1,5 @@
-
+from fastapi import Form
+from app.services.pdf_extraction_service import PDFExtractionService
 from typing import Literal
 from pathlib import Path
 from uuid import uuid4
@@ -413,3 +414,101 @@ async def review_invoice(
 
     finally:
         db.close()
+
+
+# --------------------------------------------------
+# EXTRACT AND PROCESS PDF INVOICE
+# --------------------------------------------------
+
+@app.post("/invoices/extract-and-process")
+async def extract_and_process_invoice(
+    file: UploadFile = File(...)
+):
+    """
+    Extract fields from a text-based PDF and process the invoice
+    through the existing multi-agent workflow.
+
+    Incomplete extraction fails closed without creating an
+    invoice record or initiating any payment.
+    """
+
+    original_filename = Path(file.filename or "invoice.pdf").name
+    extension = Path(original_filename).suffix.lower()
+
+    if extension != ".pdf":
+        raise HTTPException(
+            status_code=400,
+            detail="This endpoint accepts PDF files only."
+        )
+
+    content = await file.read(MAX_FILE_SIZE + 1)
+    await file.close()
+
+    if not content:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded PDF is empty."
+        )
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail="PDF exceeds the 10 MB limit."
+        )
+
+    # Basic PDF signature validation.
+    if not content.startswith(b"%PDF-"):
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded file is not a valid PDF."
+        )
+
+    destination = UPLOAD_DIR / f"{uuid4().hex}.pdf"
+
+    try:
+        destination.write_bytes(content)
+
+        extractor = PDFExtractionService()
+        result = extractor.extract(destination)
+
+        if result["requires_human_review"]:
+            return {
+                "status": "extraction_review_required",
+                "message": (
+                    "PDF extraction is incomplete. "
+                    "Manual correction is required before processing."
+                ),
+                "extraction": result["data"],
+                "confidence": result["confidence"],
+                "issues": result["issues"],
+                "payment_initiated": False,
+            }
+
+        invoice_data = dict(result["data"])
+        invoice_data["extraction_confidence"] = result["confidence"]
+
+        # Validate against the existing Invoice model.
+        invoice = Invoice.model_validate(invoice_data)
+
+        orchestrator = InvoiceWorkflowOrchestrator()
+        packet = orchestrator.process_invoice(invoice)
+
+        return {
+            "status": "processed",
+            "extraction_confidence": result["confidence"],
+            "invoice": packet.model_dump(mode="json"),
+            "payment_initiated": False,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        # Fail closed: never continue processing after a technical error.
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "PDF extraction or invoice processing failed. "
+                "Manual investigation is required."
+            ),
+        )
